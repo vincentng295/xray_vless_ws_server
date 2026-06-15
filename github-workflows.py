@@ -104,8 +104,8 @@ def watch_and_upload_proxy_info():
 
 def run_threads():
     if os.getenv("BRIDGE_WORKFLOWS", "false").lower() == "true":
-        # Run the bridge workflow after 5 hours and 30 minutes to continue the workflow before timeout
-        thread_bridge = threading.Timer(5 * 60 * 60 + 30 * 60, run_bridge)
+        # Run the bridge workflow after 5 hours to continue the workflow before timeout
+        thread_bridge = threading.Timer(5 * 60 * 60, run_bridge)
         thread_bridge.daemon = True
         thread_bridge.start()
     thread_upload = threading.Thread(target=watch_and_upload_proxy_info)
