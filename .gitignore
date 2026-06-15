@@ -1,0 +1,7 @@
+.env
+/xray_bin
+frpc.toml
+*.exe
+config.json
+frp_info.config
+/__pycache__

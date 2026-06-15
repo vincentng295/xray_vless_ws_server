@@ -1,0 +1,39 @@
+name: VLESS Reality FRP
+on:
+  workflow_dispatch:
+    inputs:
+      bridge_workflows:
+        description: "Bridge the workflows"
+        default: false
+        required: false
+        type: boolean
+
+jobs:
+  run-proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download Binaries
+        run: |
+          python3 download-xray.py
+          python3 download-cloudflared.py
+
+      - name: Start Main Application
+        env:
+          BRIDGE_WORKFLOWS: ${{ github.event.inputs.bridge_workflows }}
+          ENV_CONFIG: ${{ secrets.ENV_CONFIG }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONUNBUFFERED: 1
+        run: python3 github-workflows.py
