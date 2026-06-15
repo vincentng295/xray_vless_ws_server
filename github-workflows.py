@@ -67,33 +67,39 @@ def run_bridge():
 
 
 def watch_and_upload_proxy_info():
-    file = "frp_info.config"
+    files_to_watch = ["frp_info.config", "frp_info.json"]
     token = os.getenv("GITHUB_TOKEN", "")
     repo = os.getenv("GITHUB_REPOSITORY", "") 
     if not token or not repo:
-        print("Missing GITHUB_TOKEN or GITHUB_REPO")
+        print("Missing GITHUB_TOKEN or GITHUB_REPOSITORY")
         return
-    last_mtime = None
-    last_uploaded_time = 0
+    file_states = {
+        filepath: {"last_mtime": None, "last_uploaded_time": 0}
+        for filepath in files_to_watch
+    }
+    print(f"Starting to watch files: {', '.join(files_to_watch)} (uploading to 'config')...")
     while True:
-        try:
-            if os.path.exists(file):
-                mtime = os.path.getmtime(file)
-                if last_mtime is None or mtime != last_mtime:
-                    now = time.time()
-                    if now - last_uploaded_time > 3:
-                        print("File changed or created!")
-                        for _ in range(3):
-                            try:
-                                upload_file(token, repo, file, "config")
-                                last_uploaded_time = now
-                                break
-                            except Exception as e:
-                                print("Upload retry:", e)
-                                time.sleep(2)
-                    last_mtime = mtime
-        except Exception as e:
-            print("Error:", e)
+        for filepath in files_to_watch:
+            try:
+                if os.path.exists(filepath):
+                    mtime = os.path.getmtime(filepath)
+                    state = file_states[filepath]
+                    if state["last_mtime"] is None or mtime != state["last_mtime"]:
+                        now = time.time()
+                        if now - state["last_uploaded_time"] > 3:
+                            print(f"[{filepath}] File changed or created!")
+                            for attempt in range(3):
+                                try:
+                                    upload_file(token, repo, filepath, "config")
+                                    state["last_uploaded_time"] = now
+                                    print(f"[{filepath}] Uploaded successfully to 'config'.")
+                                    break
+                                except Exception as e:
+                                    print(f"[{filepath}] Upload retry {attempt + 1}/3 failed: {e}")
+                                    time.sleep(2)
+                        state["last_mtime"] = mtime
+            except Exception as e:
+                print(f"Error while processing {filepath}: {e}")
         time.sleep(2)
 
 def run_threads():

@@ -11,11 +11,21 @@ import platform
 import uuid
 import time
 from logging_site import RealtimeLogger
+import requests
 
 def main():
     # =========================================
     # CONFIG SERVER (Cloudflare Tunnel)
     # =========================================
+    START_TIME = int(time.time())
+    def get_public_url():
+        # Get ip via ipify
+        try:
+            ip = requests.get("https://api.ipify.org").text
+            return ip
+        except Exception as e:
+            print(f"[!] Failed to get public IP: {e}")
+            return "0.0.0.0"
 
     def init_env_file():
         env_path = ".env"
@@ -162,6 +172,34 @@ def main():
     threading.Thread(target=monitor_xray, args=(xp.stdout,), daemon=True).start()
     threading.Thread(target=monitor_cloudflare, args=(clp.stdout,), daemon=True).start()
 
+    def print_vless_links(tunnel_host, uuid_str, fake_sni, ws_path):
+        import urllib.parse
+        encoded_path = urllib.parse.quote(ws_path, safe='')
+        
+        vless_tls = f"vless://{uuid_str}@{fake_sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host}&sni={tunnel_host}#Cloudflare%20TLS"
+        vless_http = f"vless://{uuid_str}@{fake_sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host}#Cloudflare%20HTTP"
+
+        print("\n" + "="*70)
+        print(" CONNECTED TO CLOUDFLARE TUNNEL")
+        print("="*70)
+        # print(f"[+] Port 443 (TLS): \n    {vless_tls}\n")
+        # print(f"[+] Port 80 (No TLS): \n    {vless_http}\n")
+        print("="*70 + "\n")
+
+        with open("frp_info.config", "w", encoding='utf-8') as f:
+            f.write(vless_tls + "\n" + vless_http)
+            print("Written to frp_info.config")
+        
+        frp_info = {
+            "payloads": [vless_tls, vless_http],
+            "ip": get_public_url(),
+            "start_time": START_TIME,
+        }
+
+        with open("frp_info.json", "w", encoding='utf-8') as f:
+            json.dump(frp_info, f, indent=4)
+            print("Written to frp_info.json")
+
     try:
         while True:
             if xp.poll() is not None:
@@ -180,24 +218,6 @@ def main():
         except: pass
         try: clp.terminate()
         except: pass
-
-def print_vless_links(tunnel_host, uuid_str, fake_sni, ws_path):
-    import urllib.parse
-    encoded_path = urllib.parse.quote(ws_path, safe='')
-    
-    vless_tls = f"vless://{uuid_str}@{fake_sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host}&sni={tunnel_host}#Cloudflare%20TLS"
-    vless_http = f"vless://{uuid_str}@{fake_sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host}#Cloudflare%20HTTP"
-
-    print("\n" + "="*70)
-    print(" CONNECTED TO CLOUDFLARE TUNNEL")
-    print("="*70)
-    # print(f"[+] Port 443 (TLS): \n    {vless_tls}\n")
-    # print(f"[+] Port 80 (No TLS): \n    {vless_http}\n")
-    print("="*70 + "\n")
-
-    with open("frp_info.config", "w", encoding='utf-8') as f:
-        f.write(vless_tls + "\n" + vless_http)
-        print("Written to frp_info.config!")
 
 if __name__ == "__main__":
     main()

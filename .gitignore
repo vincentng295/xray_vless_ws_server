@@ -5,3 +5,4 @@ frpc.toml
 config.json
 frp_info.config
 /__pycache__
+frp_info.json
