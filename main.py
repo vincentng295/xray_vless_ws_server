@@ -185,8 +185,8 @@ def print_vless_links(tunnel_host, uuid_str, fake_sni, ws_path):
     import urllib.parse
     encoded_path = urllib.parse.quote(ws_path, safe='')
     
-    vless_tls = f"vless://{uuid_str}@{fake_sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host}#Cloudflare_TLS"
-    vless_http = f"vless://{uuid_str}@{fake_sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host}#Cloudflare_HTTP"
+    vless_tls = f"vless://{uuid_str}@{fake_sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host}&sni={tunnel_host}#Cloudflare%20TLS"
+    vless_http = f"vless://{uuid_str}@{fake_sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host}#Cloudflare%20HTTP"
 
     print("\n" + "="*70)
     print(" CONNECTED TO CLOUDFLARE TUNNEL")
