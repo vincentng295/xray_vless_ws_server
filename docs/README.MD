@@ -1,5 +1,7 @@
 # Xray VLESS-WS Bypass Protocol: Anycast Routing & SNI Spoofing (Proof of Concept)
 
+[Xem phiên bản Tiếng Việt](README_vi.MD)
+
 An automated, educational Python-based Proof of Concept (PoC) demonstrating how to leverage **Xray-Core** and ephemeral **Cloudflare Tunnels (`trycloudflare.com`)** to establish a secure VLESS-WebSocket proxy. This repository serves as a localized staging environment to validate Layer 7 deep-packet inspection (DPI) bypasses over zero-rated carrier networks (e.g., TikTok bundles) before committing to production infrastructure.
 
 The idea of this project came from here: [The Anatomy of a Loophole: A Tech-Enthusiast's Journey into Layer-7 Decoupling](IDEAS.MD)
@@ -80,5 +82,3 @@ WS_PATH=/tiktok4g
 ## Acknowledgements
 
 By reverse engineering commercial 4G bypass services like `betltone.com`, `phuonglien4g.com`, and similar community providers, the structural mechanics of this framework were successfully verified.
-
-Through analyzing their production-grade reverse proxies, Wireshark payloads, and advanced multi-tenant Cloudflare SaaS configurations (Custom Hostnames / Fallback Origins), we decoded the exact decoupling mechanics of Address and Host packet manipulation. Their active network implementations provided the empirical technical blueprints necessary to translate complex corporate CDN edge configurations into this simplified, educational staging utility.
