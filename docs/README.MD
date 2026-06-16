@@ -53,6 +53,11 @@ The core mechanism relies on decoupling the outer transport layer from inner rou
 2. **Anycast Realignment:** Because TikTok routes API nodes natively through **Cloudflare Anycast Global Infrastructure**, the carrier safely hands the packet directly to a nearby Cloudflare edge node.
 3. **The Layer 7 Redirect:** The edge node opens the outer transport frame, inspects the hidden `Host Header` (`host=xxxx.trycloudflare.com`), and passes the proxy connection down to your executing environment.
 
+Based on the network architecture analysis, the carrier's DPI firewall must enforce the following heuristic rules to completely mitigate this Layer-7 Decoupling exploit:
+
+1. Strict Application-Layer Verification: The DPI gateway must evolve beyond evaluating merely the outer perimeter of a packet (such as the transport-layer Address or SNI). The firewall heuristics must be updated to inspect the inner application-layer data payload.
+2. Cross-Field Header Validation: Carriers must implement strict packet verification down to the application layer to validate that the external, transport-layer SNI explicitly matches the internal HTTP Host mapping embedded within the Layer 7 headers. Any structural discrepancy (e.g., an outer packet flagged as a whitelisted TikTok domain while the inner host header maps to an unauthorized multi-tenant CDN or ephemeral tunnel) must trigger an immediate drop rule at the telco gateway.
+
 ---
 
 ## Script Features

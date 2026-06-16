@@ -51,6 +51,12 @@ Cơ chế cốt lõi dựa trên việc tách biệt lớp vận chuyển bên n
 2. **Căn Chỉnh Định Tuyến Anycast:** Vì các node API của TikTok vốn định tuyến native qua **Hạ tầng Toàn cầu Cloudflare Anycast**, nhà mạng sẽ chuyển giao gói tin một cách an toàn đến một edge node Cloudflare gần nhất.
 3. **Điều Hướng Lớp Layer 7 (Layer 7 Redirect):** Edge node mở khung vận chuyển bên ngoài, kiểm tra trường `Host Header` ẩn bên trong (`host=xxxx.trycloudflare.com`), và chuyển tiếp kết nối proxy xuống môi trường đang thực thi của bạn.
 
+Dựa trên phân tích kiến trúc tầng mạng, hệ thống tường lửa DPI của nhà mạng cần nâng cấp và thực thi các bộ quy tắc Heuristics sau để vá triệt để lỗ hổng Layer-7 Decoupling:
+
+1. Xác thực gói tin sâu xuống tầng ứng dụng: Hệ thống DPI không được chỉ dừng lại ở việc kiểm tra lớp vỏ bọc bên ngoài của gói tin (SNI/Address ở tầng vận chuyển). Tường lửa cần thực thi các thuật toán kiểm tra Heuristics nâng cao để đi sâu vào xác thực lớp dữ liệu bên trong.
+2. Đối chiếu chéo thông tin Header: Nhà mạng cần kiểm tra và bắt buộc tham số SNI bên ngoài (Outer SNI) phải trùng khớp hoàn toàn với thuộc tính HTTP Host Mapping bên trong (Inner HTTP Host Header) thuộc tầng ứng dụng (Layer 7) sau khi quá trình bắt tay TLS hoàn tất. Nếu phát hiện sự sai lệch (ví dụ: SNI ngoài là TikTok nhưng Host Header trong lại là tên miền lạ chạy trên Cloudflare), gói tin phải bị chặn ngay lập tức.
+
+
 ---
 
 ## Các Tính Năng Của Script
