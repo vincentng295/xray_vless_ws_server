@@ -60,6 +60,16 @@ Based on the network architecture analysis, the carrier's DPI firewall must enfo
 
 ---
 
+## CDN Provider Interoperability
+
+While this specific Proof of Concept utilizes Cloudflare infrastructure (`cloudflared` and Cloudflare Anycast IPs) for local ease of deployment, the underlying core mechanism - **Layer 7 Decoupling** - is provider-agnostic. 
+
+The structural technique successfully extends to any multi-tenant Content Delivery Network (CDN) or Edge computing platform operating under similar routing architectures, including:
+* **Amazon CloudFront (AWS):** By pairing a zero-rated SNI resolving to AWS infrastructure (e.g., legacy TikTok endpoints) with an inner HTTP Host Header or custom origin distribution mapped to an AWS CloudFront configuration.
+* **Akamai / Fastly / Gcore:** As long as the Mobile Network Operator (MNO) routes the whitelisted perimeter traffic to the respective provider's edge nodes, the edge infrastructure can process and forward encapsulated payloads down to separate targeted backends.
+
+---
+
 ## Script Features
 
 - **Dynamic Local Environment Orchestration:** Automated verification and generation of localized `.env` dependencies.

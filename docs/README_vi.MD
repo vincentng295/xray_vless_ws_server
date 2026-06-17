@@ -59,6 +59,16 @@ Dựa trên phân tích kiến trúc tầng mạng, hệ thống tường lửa 
 
 ---
 
+## Khả Năng Tương Thích Với Các Nhà Cung Cấp CDN Khác
+
+Mặc dù bản Proof of Concept cụ thể này sử dụng hạ tầng của Cloudflare (`cloudflared` và dải IP Cloudflare Anycast) để đơn giản hóa việc triển khai cục bộ, nhưng cơ chế cốt lõi - **Tách lớp Layer 7 (Layer 7 Decoupling)** - hoàn toàn không bị giới hạn bởi một nhà cung cấp duy nhất.
+
+Về mặt kiến trúc, kỹ thuật này hoạt động tương tự trên bất kỳ mạng phân phối nội dung đa phân nhánh (Multi-tenant CDN) hoặc nền tảng Edge Computing nào có chung cấu trúc định tuyến, bao gồm:
+* **Amazon CloudFront (AWS):** Bằng cách kết hợp một SNI được miễn phí data phân giải về hạ tầng của AWS với một trường HTTP Host Header hoặc phân phối cấu hình (Distribution Origin) bên trong trỏ về tài nguyên AWS tương ứng.
+* **Akamai / Fastly / Gcore:** Chỉ cần Tường lửa nhà mạng (MNO) định tuyến lưu lượng lớp vỏ ngoài đến đúng các Edge Node của nhà cung cấp đó, hạ tầng biên hoàn toàn có thể bóc tách lớp payload và chuyển tiếp dữ liệu ngầm về các backend độc lập.
+
+---
+
 ## Các Tính Năng Của Script
 
 - **Điều Phối Môi Trường Cục Bộ Tự Động:** Tự động xác thực và khởi tạo các phụ thuộc tệp `.env` cục bộ.
