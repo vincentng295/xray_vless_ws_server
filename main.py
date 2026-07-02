@@ -33,7 +33,9 @@ def main():
             "PORT": "8888",
             "XRAY_UUID": str(uuid.uuid4()),
             "FAKE_SNI": "api24-normal-alisg.tiktokv.com",
-            "WS_PATH": "/tiktok4g"
+            "WS_PATH": "/tiktok4g",
+            "WS_HOST": "trycloudflare.com",
+            "WEBHOOK_URL": ""
         }
 
         if not os.path.exists(env_path):
@@ -52,6 +54,29 @@ def main():
     UUID = os.getenv("XRAY_UUID", str(uuid.uuid4()))
     FAKE_SNI = os.getenv("FAKE_SNI", "link.e.tiktok.com")
     WS_PATH = os.getenv("WS_PATH", "/tiktok4g")
+    WS_HOST = os.getenv("WS_HOST", "trycloudflare.com") # or set a custom host if you have one that points to your Cloudflare Tunnel
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+
+    def send_webhook(data):
+        if not WEBHOOK_URL: 
+            return
+        def task():
+            try:
+                response = requests.post(
+                    WEBHOOK_URL, 
+                    json=data,
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    print("[+] Webhook sent successfully!")
+                else:
+                    print(f"[-] Webhook failed with status: {response.status_code}")
+                    # print(f"Response: {response.text}")
+            except Exception as e:
+                print(f"[!] Error sending webhook: {e}")
+        thread = threading.Thread(target=task)
+        thread.daemon = True
+        thread.start()
 
     if not WS_PATH.startswith("/"):
         WS_PATH = "/" + WS_PATH
@@ -175,9 +200,13 @@ def main():
     def print_vless_links(tunnel_host, uuid_str, fake_sni, ws_path):
         import urllib.parse
         encoded_path = urllib.parse.quote(ws_path, safe='')
+
+        tunnel_host_info = tunnel_host
+        if WS_HOST and WS_HOST != "trycloudflare.com": # if WS_HOST is set, use it instead of the Cloudflare URL
+            tunnel_host_info = WS_HOST
         
-        vless_tls = f"vless://{uuid_str}@{fake_sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host}&sni={tunnel_host}#Cloudflare%20TLS"
-        vless_http = f"vless://{uuid_str}@{fake_sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host}#Cloudflare%20HTTP"
+        vless_tls = f"vless://{uuid_str}@{fake_sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}#Cloudflare%20TLS"
+        vless_http = f"vless://{uuid_str}@{fake_sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host_info}#Cloudflare%20HTTP"
 
         print("\n" + "="*70)
         print(" CONNECTED TO CLOUDFLARE TUNNEL")
@@ -193,9 +222,12 @@ def main():
         frp_info = {
             "payloads": [vless_tls, vless_http],
             "ip": get_public_url(),
+            "wshost": tunnel_host, # real Cloudflare Tunnel host
+            "wspath": ws_path,
             "start_time": START_TIME,
         }
 
+        send_webhook(frp_info)
         with open("frp_info.json", "w", encoding='utf-8') as f:
             json.dump(frp_info, f, indent=4)
             print("Written to frp_info.json")
