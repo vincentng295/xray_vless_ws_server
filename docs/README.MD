@@ -83,10 +83,12 @@ The structural technique successfully extends to any multi-tenant Content Delive
 ## Configuration (`.env`)
 
 ```ini
-PORT=8888
-XRAY_UUID=your-custom-vless-uuid
+PORT=127.0.0.1:8888,0.0.0.0:443,0.0.0.0:80
+XRAY_UUID=5ccad305-e243-4bb2-abf0-1e37189ce4e8
 FAKE_SNI=api24-normal-alisg.tiktokv.com
 WS_PATH=/tiktok4g
+WS_HOST=trycloudflare.com
+WEBHOOK_URL=
 
 ```
 

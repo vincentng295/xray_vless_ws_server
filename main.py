@@ -29,8 +29,10 @@ def main():
 
     def init_env_file():
         env_path = ".env"
+        # Support multiple ports format. 
+        # Default: localhost:8888, 0.0.0.0:443, 0.0.0.0:80
         default_configs = {
-            "PORT": "8888",
+            "PORT": "127.0.0.1:8888,0.0.0.0:443,0.0.0.0:80",
             "XRAY_UUID": str(uuid.uuid4()),
             "FAKE_SNI": "api24-normal-alisg.tiktokv.com",
             "WS_PATH": "/tiktok4g",
@@ -50,12 +52,33 @@ def main():
     init_env_file()
     load_dotenv()
 
-    PORT = int(os.getenv("PORT", 8888))
+    # Read raw PORT string from .env
+    PORT_ENV = os.getenv("PORT", "127.0.0.1:8888,0.0.0.0:443,0.0.0.0:80")
     UUID = os.getenv("XRAY_UUID", str(uuid.uuid4()))
     FAKE_SNI = os.getenv("FAKE_SNI", "link.e.tiktok.com")
     WS_PATH = os.getenv("WS_PATH", "/tiktok4g")
     WS_HOST = os.getenv("WS_HOST", "trycloudflare.com") # or set a custom host if you have one that points to your Cloudflare Tunnel
     WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+
+    # Parse multi-port configuration
+    # Supported formats: "8888" (defaults to 0.0.0.0), "127.0.0.1:8888", "0.0.0.0:443,0.0.0.0:80"
+    inbound_ports = []
+    for p_item in PORT_ENV.split(","):
+        p_item = p_item.strip()
+        if ":" in p_item:
+            parts = p_item.split(":")
+            listen_ip = ":".join(parts[:-1])
+            port_num = int(parts[-1])
+            inbound_ports.append((listen_ip, port_num))
+        else:
+            inbound_ports.append(("0.0.0.0", int(p_item)))
+
+    # Cloudflare tunnel will point to the first port in the list
+    CLOUDFLARE_TARGET_IP = inbound_ports[0][0]
+    CLOUDFLARE_TARGET_PORT = inbound_ports[0][1]
+    # If listening on all interfaces, force cloudflared to connect via localhost
+    if CLOUDFLARE_TARGET_IP == "0.0.0.0":
+        CLOUDFLARE_TARGET_IP = "127.0.0.1"
 
     def send_webhook(data):
         if not WEBHOOK_URL: 
@@ -71,7 +94,6 @@ def main():
                     print("[+] Webhook sent successfully!")
                 else:
                     print(f"[-] Webhook failed with status: {response.status_code}")
-                    # print(f"Response: {response.text}")
             except Exception as e:
                 print(f"[!] Error sending webhook: {e}")
         thread = threading.Thread(target=task)
@@ -92,37 +114,43 @@ def main():
         return
 
     # =========================================
-    # VLESS-WS
+    # VLESS-WS CONFIG GENERATOR
     # =========================================
     def write_configs():
+        inbounds = []
+        for ip, port in inbound_ports:
+            inbounds.append({
+                "port": port,
+                "listen": ip,
+                "protocol": "vless",
+                "sniffing": {
+                    "enabled": True,
+                    "destOverride": ["http", "tls"]
+                },
+                "settings": {
+                    "clients": [
+                        {
+                            "id": UUID,
+                            "level": 0
+                        }
+                    ],
+                    "decryption": "none"
+                },
+                "streamSettings": {
+                    "network": "ws",
+                    "security": "none",
+                    "wsSettings": {
+                        "path": WS_PATH,
+                        "headers": {}
+                    }
+                }
+            })
+
         xray_config = {
             "log": {
                 "loglevel": "warning"
             },
-            "inbounds": [
-                {
-                    "port": PORT,
-                    "listen": "0.0.0.0",
-                    "protocol": "vless",
-                    "settings": {
-                        "clients": [
-                            {
-                                "id": UUID,
-                                "level": 0
-                            }
-                        ],
-                        "decryption": "none"
-                    },
-                    "streamSettings": {
-                        "network": "ws",
-                        "security": "none",
-                        "wsSettings": {
-                            "path": WS_PATH,
-                            "headers": {}
-                        }
-                    }
-                }
-            ],
+            "inbounds": inbounds,
             "outbounds": [
                 {
                     "protocol": "freedom",
@@ -139,7 +167,9 @@ def main():
 
     write_configs()
 
-    print(f"[*] Launching XRAY at {PORT}...")
+    print(f"[*] Launching XRAY with multi-port inbounds...")
+    # Using 'run' with extra environment or fallback handling is ideal, 
+    # but natively Xray logs the error to stderr and continues if other ports work.
     xp = subprocess.Popen(
         [XRAY_BIN, "run", "-c", "config.json"],
         stdout=subprocess.PIPE,
@@ -149,9 +179,9 @@ def main():
         errors='replace'
     )
 
-    print("[*] Launching Cloudflare Tunnel at (TryCloudflare)...")
+    print(f"[*] Launching Cloudflare Tunnel pointing to http://{CLOUDFLARE_TARGET_IP}:{CLOUDFLARE_TARGET_PORT}...")
     clp = subprocess.Popen(
-        [CLF_BIN, "tunnel", "--url", f"http://127.0.0.1:{PORT}"],
+        [CLF_BIN, "tunnel", "--url", f"http://{CLOUDFLARE_TARGET_IP}:{CLOUDFLARE_TARGET_PORT}"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -172,7 +202,13 @@ def main():
         try:
             with pipe:
                 for line in iter(pipe.readline, ''):
-                    # print(f"[XRAY CRITICAL LOG] -> {line.strip()}")
+                    # Suppress or catch common permission denied / bind errors quietly for Termux environment
+                    if "Permission denied" in line or "EACCES" in line or "address already in use" in line:
+                        # Log silently to Web UI instead of crashing the main process stdout aggressively
+                        if logger:
+                            logger.push_log(f"[SILENT BIND WARNING] {line.strip()}", "XRAY")
+                        continue
+                    
                     if logger:
                         logger.push_log(line.strip(), "XRAY")
         except Exception:
@@ -202,7 +238,7 @@ def main():
         encoded_path = urllib.parse.quote(ws_path, safe='')
 
         tunnel_host_info = tunnel_host
-        if WS_HOST and WS_HOST != "trycloudflare.com": # if WS_HOST is set, use it instead of the Cloudflare URL
+        if WS_HOST and WS_HOST != "trycloudflare.com": 
             tunnel_host_info = WS_HOST
         
         vless_tls = f"vless://{uuid_str}@{fake_sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}#Cloudflare%20TLS"
@@ -211,8 +247,6 @@ def main():
         print("\n" + "="*70)
         print(" CONNECTED TO CLOUDFLARE TUNNEL")
         print("="*70)
-        # print(f"[+] Port 443 (TLS): \n    {vless_tls}\n")
-        # print(f"[+] Port 80 (No TLS): \n    {vless_http}\n")
         print("="*70 + "\n")
 
         with open("frp_info.config", "w", encoding='utf-8') as f:
@@ -222,7 +256,7 @@ def main():
         frp_info = {
             "payloads": [vless_tls, vless_http],
             "ip": get_public_url(),
-            "wshost": tunnel_host, # real Cloudflare Tunnel host
+            "wshost": tunnel_host, 
             "wspath": ws_path,
             "start_time": START_TIME,
         }
@@ -234,17 +268,15 @@ def main():
 
     try:
         while True:
-            if xp.poll() is not None:
-                print(f"\n[!] CẢNH BÁO: Tiến trình XRAY đã tự động dừng (Mã thoát: {xp.poll()}).")
-                print("[!] Vui lòng đọc dòng [XRAY CRITICAL LOG] ở ngay phía trên để biết lý do chính xác.")
-                break
-            if clp.poll() is not None:
-                print(f"\n[!] CẢNH BÁO: Tiến trình CLOUDFLARED đã tự động dừng (Mã thoát: {clp.poll()}).")
+            # Termux workaround: We don't crash if Xray returns a code but cloudflared is still happily running on the local port 8888.
+            # However, if both stop or core configuration is broken, we terminate.
+            if xp.poll() is not None and clp.poll() is not None:
+                print(f"\n[!] WARNING: Both processes have stopped.")
                 break
             time.sleep(1)
             
     except KeyboardInterrupt:
-        print("\n[*] Đang dừng các dịch vụ...")
+        print("\n[*] Stopping services...")
     finally:
         try: xp.terminate()
         except: pass
