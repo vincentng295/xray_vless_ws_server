@@ -12,6 +12,10 @@ import uuid
 import time
 from logging_site import RealtimeLogger
 import requests
+import importlib
+
+xray_downloader = importlib.import_module("download-xray")
+cloudflared_downloader = importlib.import_module("download-cloudflared")
 
 def main():
     # =========================================
@@ -108,10 +112,10 @@ def main():
 
     if not os.path.exists(XRAY_BIN):
         print(f"[ERROR] Unable to find xray path: {XRAY_BIN}")
-        return
+        xray_downloader.install_xray()
     if not os.path.exists(CLF_BIN):
         print(f"[ERROR] Unable to find Cloudflared path: {CLF_BIN}")
-        return
+        cloudflared_downloader.install_cloudflared()
 
     # =========================================
     # VLESS-WS CONFIG GENERATOR
