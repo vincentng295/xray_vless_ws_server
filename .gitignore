@@ -6,3 +6,5 @@ config.json
 frp_info.config
 /__pycache__
 frp_info.json
+wgcf.json
+wgcf.xray.json
