@@ -16,7 +16,7 @@ def get_download_info():
             return "cloudflared-windows-amd64.exe", "cloudflared.exe"
         return "cloudflared-windows-386.exe", "cloudflared.exe"
 
-    if sys == "linux":
+    if sys == "linux" or sys == "android":
         if arch in ["aarch64", "arm64"]:
             return "cloudflared-linux-arm64", "cloudflared"
         if arch in ["armv7l", "arm"]:

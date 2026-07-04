@@ -13,16 +13,20 @@ def get_os_name():
     arch = platform.machine().lower()
 
     if sys == "windows":
-        return "windows-64.zip", "xray.exe"
+        if arch in ["x86_64", "amd64", "x64"]:
+            return "windows-64.zip", "xray.exe"
 
     if sys == "linux":
-        # Hỗ trợ Android/Termux và các chip ARM
         if arch in ["aarch64", "arm64"]:
-            return "linux-arm64-v8a.zip", "xray"
-        if arch in ["armv7l", "arm"]:
-            return "linux-arm32-v7a.zip", "xray"
-        # Mặc định cho Linux PC
-        return "linux-64.zip", "xray"
+            return "linux-arm64.zip", "xray"
+        if arch in ["x86_64", "amd64", "x64"]:
+            return "linux-64.zip", "xray"
+
+    if sys == "android":
+        if arch in ["aarch64", "arm64"]:
+            return "android-arm64-v8a.zip", "xray"
+        if arch in ["x86_64", "amd64", "x64"]:
+            return "android-amd64.zip", "xray"
 
     raise Exception("Unsupported OS")
 
