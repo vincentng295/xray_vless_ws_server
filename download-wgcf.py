@@ -13,13 +13,6 @@ def get_os_name():
     sys_type = platform.system().lower()
     arch = platform.machine().lower()
 
-   
-    is_android = "android" in sys.platform or "ANDROID_DATA" in os.environ
-
-    if is_android:
-        if arch in ["aarch64", "arm64"]:
-            return "android-arm64-v8a.tar.zstd", "wgcf-cli"
-
     if sys_type == "windows":
         if arch in ["x86_64", "amd64"]:
             return "windows-64.tar.zstd", "wgcf-cli.exe"
@@ -39,7 +32,11 @@ def get_os_name():
             return "macos-arm64-v8a.tar.zstd", "wgcf-cli"
         return "macos-64.tar.zstd", "wgcf-cli"
 
-    raise Exception(f"Hệ điều hành hoặc kiến trúc không được hỗ trợ: {sys_type} ({arch})")
+    if sys_type == "android":
+        if arch in ["aarch64", "arm64"]:
+            return "android-arm64-v8a.tar.zstd", "wgcf-cli"
+        
+    raise Exception(f"OS {sys_type} {arch} not supported.")
 
 def download_file(url, filename):
     print(f"Đang tải: {url}")

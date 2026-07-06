@@ -10,13 +10,12 @@ def get_download_info():
     sys = platform.system().lower()
     arch = platform.machine().lower()
 
-    # Cloudflared đặt tên file theo dạng: cloudflared-linux-amd64, cloudflared-windows-amd64.exe
     if sys == "windows":
         if arch in ["amd64", "x86_64"]:
             return "cloudflared-windows-amd64.exe", "cloudflared.exe"
         return "cloudflared-windows-386.exe", "cloudflared.exe"
 
-    if sys == "linux" or sys == "android":
+    if sys == "linux":
         if arch in ["aarch64", "arm64"]:
             return "cloudflared-linux-arm64", "cloudflared"
         if arch in ["armv7l", "arm"]:
@@ -28,7 +27,12 @@ def get_download_info():
     if sys == "darwin": # macOS
         return "cloudflared-darwin-amd64.tgz", "cloudflared"
 
-    raise Exception(f"Hệ điều hành {sys} {arch} chưa được hỗ trợ.")
+    if sys == "android":
+        # Termux cannot run cloudflared directly, suggest using package manager
+        print("Please install cloudflared by: pkg install cloudflared -y")
+        print("Or using ubuntu proot distro in Termux")
+
+    raise Exception(f"OS {sys} {arch} not supported.")
 
 def download_file(url, filename):
     print(f"Đang tải: {url}")

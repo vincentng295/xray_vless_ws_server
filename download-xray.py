@@ -28,7 +28,13 @@ def get_os_name():
         if arch in ["x86_64", "amd64", "x64"]:
             return "android-amd64.zip", "xray"
 
-    raise Exception("Unsupported OS")
+    if sys == "darwin": # macOS
+        if arch in ["aarch64", "arm64"]:
+            return "macos-arm64-v8a.zip", "xray"
+        if arch in ["x86_64", "amd64", "x64"]:
+            return "macos-64.zip", "xray"
+
+    raise Exception(f"OS {sys} {arch} not supported.")
 
 def download_file(url, filename):
     print(f"Downloading: {url}")

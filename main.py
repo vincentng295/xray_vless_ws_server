@@ -35,9 +35,9 @@ def main():
     def init_env_file():
         env_path = ".env"
         # Support multiple ports format. 
-        # Default: localhost:8888, 0.0.0.0:443, 0.0.0.0:80
+        # Default: localhost:8888
         default_configs = {
-            "PORT": "127.0.0.1:8888,0.0.0.0:443,0.0.0.0:80",
+            "PORT": "127.0.0.1:8888",
             "XRAY_UUID": str(uuid.uuid4()),
             "FAKE_SNI": "api24-normal-alisg.tiktokv.com",
             "WS_PATH": "/tiktok4g",
@@ -59,7 +59,7 @@ def main():
     load_dotenv()
 
     # Read raw PORT string from .env
-    PORT_ENV = os.getenv("PORT", "127.0.0.1:8888,0.0.0.0:443,0.0.0.0:80")
+    PORT_ENV = os.getenv("PORT", "127.0.0.1:8888")
     UUID = os.getenv("XRAY_UUID", str(uuid.uuid4()))
     FAKE_SNI = os.getenv("FAKE_SNI", "link.e.tiktok.com")
     WS_PATH = os.getenv("WS_PATH", "/tiktok4g")
