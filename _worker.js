@@ -39,14 +39,17 @@ export default {
         GLOBAL_TARGET_PATH = wspath;
 
         // 2. Also save to KV for persistence across worker restarts (uncomment if KV is set up)
-        // await env.KV_CONFIG.put("TARGET_HOST", wshost);
-        // await env.KV_CONFIG.put("TARGET_PATH", wspath);
+        if (env.KV_CONFIG) {
+          await env.KV_CONFIG.put("TARGET_HOST", wshost);
+          await env.KV_CONFIG.put("TARGET_PATH", wspath);
+        }
 
         return new Response(JSON.stringify({
           status: "success",
           message: "Worker configured successfully via Python Webhook!",
           saved_host: wshost,
-          saved_path: wspath
+          saved_path: wspath,
+          kv_setup: (env.KV_CONFIG)? true : false
         }), { 
           status: 200, 
           headers: { "Content-Type": "application/json" } 
@@ -58,18 +61,18 @@ export default {
     }
 
     // If the request is not to /setapi, proceed to handle it as a proxy request
-    /*
-    if (!GLOBAL_TARGET_HOST || !GLOBAL_TARGET_PATH) {
-        // If the global variables are empty, try to load from KV (if KV is set up)
-        const kvHost = await env.KV_CONFIG.get("TARGET_HOST");
-        const kvPath = await env.KV_CONFIG.get("TARGET_PATH");
+    if (env.KV_CONFIG) {
+      if (!GLOBAL_TARGET_HOST || !GLOBAL_TARGET_PATH) {
+          // If the global variables are empty, try to load from KV (if KV is set up)
+          const kvHost = await env.KV_CONFIG.get("TARGET_HOST");
+          const kvPath = await env.KV_CONFIG.get("TARGET_PATH");
 
-        if (kvHost && kvPath) {
+          if (kvHost && kvPath) {
             GLOBAL_TARGET_HOST = kvHost;
             GLOBAL_TARGET_PATH = kvPath;
-        }
+          }
+      }
     }
-    */
 
     // If still empty, return 503
     const targetHost = GLOBAL_TARGET_HOST;
