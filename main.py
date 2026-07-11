@@ -22,7 +22,20 @@ def main():
     # =========================================
     # CONFIG SERVER (Cloudflare Tunnel)
     # =========================================
+    default_configs = {
+        "PORT": "127.0.0.1:8888",
+        "XRAY_UUID": str(uuid.uuid4()),
+        "FAKE_SNI": "api24-normal-alisg.tiktokv.com,api24-normal-useast1a.tiktokv.com",
+        "WS_PATH": "/tiktok4g",
+        "WS_HOST": "trycloudflare.com",
+        "ENABLE_WARP": "false",
+        "WEBHOOK_URL": ""
+    }
     START_TIME = int(time.time())
+
+    def get_os_env(name):
+        return os.getenv(name, default_configs.get(name))
+
     def get_public_url():
         # Get ip via ipify
         try:
@@ -36,15 +49,6 @@ def main():
         env_path = ".env"
         # Support multiple ports format. 
         # Default: localhost:8888
-        default_configs = {
-            "PORT": "127.0.0.1:8888",
-            "XRAY_UUID": str(uuid.uuid4()),
-            "FAKE_SNI": "api24-normal-alisg.tiktokv.com",
-            "WS_PATH": "/tiktok4g",
-            "WS_HOST": "trycloudflare.com",
-            "ENABLE_WARP": "false",
-            "WEBHOOK_URL": ""
-        }
 
         if not os.path.exists(env_path):
             print("[*] File .env does not exist. Using default configuration...")
@@ -59,13 +63,13 @@ def main():
     load_dotenv()
 
     # Read raw PORT string from .env
-    PORT_ENV = os.getenv("PORT", "127.0.0.1:8888")
-    UUID = os.getenv("XRAY_UUID", str(uuid.uuid4()))
-    FAKE_SNI = os.getenv("FAKE_SNI", "link.e.tiktok.com")
-    WS_PATH = os.getenv("WS_PATH", "/tiktok4g")
-    WS_HOST = os.getenv("WS_HOST", "trycloudflare.com") # or set a custom host if you have one that points to your Cloudflare Tunnel
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
-    ENABLE_WARP = os.getenv("ENABLE_WARP", "false").lower() == "true"
+    PORT_ENV = get_os_env("PORT")
+    UUID = get_os_env("XRAY_UUID")
+    FAKE_SNI = get_os_env("FAKE_SNI")
+    WS_PATH = get_os_env("WS_PATH")
+    WS_HOST = get_os_env("WS_HOST")
+    WEBHOOK_URL = get_os_env("WEBHOOK_URL")
+    ENABLE_WARP = get_os_env("ENABLE_WARP").lower() == "true"
 
     # Parse multi-port configuration
     # Supported formats: "8888" (defaults to 0.0.0.0), "127.0.0.1:8888", "0.0.0.0:443,0.0.0.0:80"
@@ -265,7 +269,8 @@ def main():
                     if match and not cloudflare_url:
                         cloudflare_url = match.group(0).replace("https://", "")
                         print_vless_links(cloudflare_url, UUID, FAKE_SNI, WS_PATH)
-        except Exception:
+        except Exception as e:
+            #print(e)
             pass
 
     threading.Thread(target=monitor_xray, args=(xp.stdout,), daemon=True).start()
@@ -279,8 +284,13 @@ def main():
         if WS_HOST and WS_HOST != "trycloudflare.com": 
             tunnel_host_info = WS_HOST
         
-        vless_tls = f"vless://{uuid_str}@{fake_sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}#Cloudflare%20TLS"
-        vless_http = f"vless://{uuid_str}@{fake_sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host_info}#Cloudflare%20HTTP"
+        payloads = []
+
+        for sni in fake_sni.split(","):
+            payloads.extend([
+                f"vless://{uuid_str}@{sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}#{sni}%20TLS",
+                f"vless://{uuid_str}@{sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host_info}#{sni}%20NO%20TLS"
+            ])
 
         print("\n" + "="*70)
         print(" CONNECTED TO CLOUDFLARE TUNNEL")
@@ -288,11 +298,13 @@ def main():
         print("="*70 + "\n")
 
         with open("frp_info.config", "w", encoding='utf-8') as f:
-            f.write(vless_tls + "\n" + vless_http)
+            for payload in payloads:
+                f.write(payload);
+                f.write("\n") if payloads.index(payload) < len(payloads)-1 else None
             print("Written to frp_info.config")
         
         frp_info = {
-            "payloads": [vless_tls, vless_http],
+            "payloads": payloads,
             "ip": get_public_url(),
             "wshost": tunnel_host, 
             "wspath": ws_path,
