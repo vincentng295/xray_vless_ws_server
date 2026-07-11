@@ -104,9 +104,8 @@ export default {
       newHeaders.set("Host", targetUrl.host);
 
       return fetch(targetUrl.toString(), {
-        method: request.method,
-        headers: newHeaders,
-        body: request.body
+        method: "GET",
+        headers: newHeaders
       });
     }
 
