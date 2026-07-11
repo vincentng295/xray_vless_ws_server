@@ -16,7 +16,7 @@ export default {
     // DYNAMIC CONFIGURATION API (POST /setapi?password=...)
     // ==========================================
     if (url.pathname === "/setapi") {
-      if (request.method !== "POST") {
+      if (request.method !== "GET" && request.method !== "POST") {
         return new Response("Method Not Allowed", { status: 405 });
       }
 
@@ -25,10 +25,18 @@ export default {
         return new Response("Unauthorized", { status: 403 });
       }
 
+      let wshost = "";
+      let wspath = "";
+
       try {
-        const jsonBody = await request.json();
-        const wshost = jsonBody.wshost;
-        const wspath = jsonBody.wspath;
+        if (request.method == "POST") {
+          const jsonBody = await request.json();
+          wshost = jsonBody.wshost;
+          wspath = jsonBody.wspath;
+        } else {
+          wshost = url.searchParams.get("wshost");
+          wspath = url.searchParams.get("wspath");
+        }
 
         if (!wshost || !wspath) {
           return new Response("Bad Request", { status: 400 });
@@ -75,7 +83,8 @@ export default {
     }
 
     // If still empty, return 503
-    const targetHost = GLOBAL_TARGET_HOST;
+    const targetHost = (GLOBAL_TARGET_HOST.startsWith("https://") || GLOBAL_TARGET_HOST.startsWith("http://"))? 
+      GLOBAL_TARGET_HOST : "https://" + GLOBAL_TARGET_HOST;
     let targetPath = GLOBAL_TARGET_PATH;
 
     // If targetHost or targetPath is not set, return 503 Service Unavailable
@@ -89,7 +98,7 @@ export default {
     // FORWARD WEBSOCKET PROXY LOGIC
     // ==========================================
     if (request.headers.get("Upgrade") === "websocket" && url.pathname === targetPath) {
-      const targetUrl = new URL(`https://${targetHost}${targetPath}`);
+      const targetUrl = new URL(`${targetHost}${targetPath}`);
 
       const newHeaders = new Headers(request.headers);
       newHeaders.set("Host", targetUrl.host);
