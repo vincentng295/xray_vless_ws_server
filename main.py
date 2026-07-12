@@ -285,11 +285,12 @@ def main():
             tunnel_host_info = WS_HOST
         
         payloads = []
+        sni_list = fake_sni.split(",");
 
-        for sni in fake_sni.split(","):
+        for sni in sni_list:
             payloads.extend([
-                f"vless://{uuid_str}@{sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}#{sni}%20TLS",
-                f"vless://{uuid_str}@{sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host_info}#{sni}%20NO%20TLS"
+                f"vless://{uuid_str}@{sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}#Tunnel%20{sni_list.index(sni)+1}%20TLS",
+                f"vless://{uuid_str}@{sni}:80?type=ws&encryption=none&security=&path={encoded_path}&host={tunnel_host_info}#Tunnel%20{sni_list.index(sni)+1}%20NO%20TLS"
             ])
 
         print("\n" + "="*70)
