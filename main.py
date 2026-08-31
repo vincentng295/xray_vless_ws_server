@@ -420,7 +420,13 @@ def main():
             errors='replace'
         )
 
-    clp = launch_cloudflared()
+    RUN_CLOUDFLARED = (WS_HOST == "trycloudflare.com") or bool(TUNNEL_TOKEN)
+
+    if RUN_CLOUDFLARED:
+        clp = launch_cloudflared()
+    else:
+        print(f"[*] Skipping Cloudflare Tunnel: WS_HOST='{WS_HOST}' is a custom domain and TUNNEL_TOKEN is empty. Assuming the tunnel/reverse-proxy is managed externally.")
+        clp = None
 
     cloudflare_url = None
     
@@ -468,6 +474,10 @@ def main():
                         # watch for a "connection registered" log line to know
                         # the tunnel is actually up, then print links once.
                         if cloudflare_url is None and re.search(r'[Rr]egistered tunnel connection', clean_line):
+                            print("\n" + "="*70)
+                            print(" CONNECTED TO CLOUDFLARE TUNNEL")
+                            print("="*70)
+                            print("="*70 + "\n")
                             cloudflare_url = WS_HOST
                             print_vless_links(cloudflare_url, UUID, FAKE_SNI, WS_PATH)
                         continue
@@ -475,6 +485,10 @@ def main():
                     match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', clean_line)
                     if match:
                         new_url = match.group(0).replace("https://", "")
+                        print("\n" + "="*70)
+                        print(" CONNECTED TO CLOUDFLARE TUNNEL")
+                        print("="*70)
+                        print("="*70 + "\n")
                         if new_url != cloudflare_url:
                             if cloudflare_url:
                                 print(f"[*] Detected new tunnel domain: {new_url} (was: {cloudflare_url})")
@@ -485,7 +499,8 @@ def main():
             pass
 
     threading.Thread(target=monitor_xray, args=(xp.stdout,), daemon=True).start()
-    threading.Thread(target=monitor_cloudflare, args=(clp.stdout,), daemon=True).start()
+    if clp is not None:
+        threading.Thread(target=monitor_cloudflare, args=(clp.stdout,), daemon=True).start()
 
     def print_vless_links(tunnel_host, uuid_str, fake_sni, ws_path):
         import urllib.parse
@@ -532,11 +547,6 @@ def main():
                     f"vless://{uuid_str}@{sni}:80?type={net_type}&encryption=none&security=&path={encoded_path}&host={tunnel_host_info}{mode_param}#{encoded_remark}%20NO%20TLS"
                 ])
 
-        print("\n" + "="*70)
-        print(" CONNECTED TO CLOUDFLARE TUNNEL")
-        print("="*70)
-        print("="*70 + "\n")
-
         with open("frp_info.config", "w", encoding='utf-8') as f:
             for payload in payloads:
                 f.write(payload);
@@ -559,18 +569,22 @@ def main():
             json.dump(frp_info, f, indent=4)
             print("Written to frp_info.json")
 
+    if clp is None:
+        cloudflare_url = WS_HOST
+        print_vless_links(cloudflare_url, UUID, FAKE_SNI, WS_PATH)
+
     try:
         while True:
             # Termux workaround: We don't crash if Xray returns a code but cloudflared is still happily running on the local port 8888.
             # However, if both stop or core configuration is broken, we terminate.
-            if xp.poll() is not None and clp.poll() is not None:
+            if xp.poll() is not None and (clp is None or clp.poll() is not None):
                 print(f"\n[!] WARNING: Both processes have stopped.")
                 break
 
             # If only cloudflared died (e.g. quick tunnel dropped/restarted), relaunch it.
             # This will get a brand new trycloudflare.com domain, which monitor_cloudflare
             # picks up and re-broadcasts via print_vless_links() + webhook automatically.
-            if clp.poll() is not None and xp.poll() is None:
+            if clp is not None and clp.poll() is not None and xp.poll() is None:
                 print("[!] Cloudflare Tunnel process stopped unexpectedly. Restarting...")
                 clp = launch_cloudflared()
                 threading.Thread(target=monitor_cloudflare, args=(clp.stdout,), daemon=True).start()
