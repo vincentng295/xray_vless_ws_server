@@ -3,7 +3,7 @@ import platform
 import requests
 import shutil
 
-CLOUDFLARED_VERSION = "2026.3.0" 
+CLOUDFLARED_VERSION = "2026.8.2" 
 BASE_URL = f"https://github.com/cloudflare/cloudflared/releases/download/{CLOUDFLARED_VERSION}"
 
 def get_download_info():
