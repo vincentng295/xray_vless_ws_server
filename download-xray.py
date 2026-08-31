@@ -76,7 +76,7 @@ def install_xray():
     shutil.move(src, dst)
 
     # chmod linux
-    if platform.system().lower() == "linux":
+    if platform.system().lower() == "linux" or platform.system().lower() == "darwin" or platform.system().lower() == "android":
         os.chmod(dst, 0o755)
 
     print("Xray installed at:", dst)
