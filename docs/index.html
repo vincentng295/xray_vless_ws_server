@@ -700,6 +700,48 @@ footer a { color: var(--md-on-surface-variant); }
                 <figcaption data-i18n="speedtest_xhttp_caption">VLESS + xHTTP + TLS + ALPN H3 — 183 Mbps down / 188 Mbps up</figcaption>
             </figure>
         </div>
+
+        <h4 data-i18n="wireshark_title">Wireshark Packet Inspection</h4>
+        <p data-i18n="wireshark_lead">Capturing both transports side by side on the wire reveals a second, more subtle divide: WebSocket rides on classic TCP/TLS 1.3, while xHTTP over HTTP/3 rides on QUIC/UDP — and the two look completely different under a packet analyzer.</p>
+        <div class="speedtest-gallery">
+            <figure>
+                <img src="images/vless_websocket_wireshark.jpg" alt="Wireshark capture of VLESS + WebSocket showing a plaintext TLS Client Hello with visible SNI">
+                <figcaption data-i18n="wireshark_ws_caption">VLESS + WebSocket — plain TCP handshake, then a visible TLS 1.3 <code>Client Hello</code> with the SNI (<code>homevps.huskydg.io.vn</code>) sitting in cleartext on the wire.</figcaption>
+            </figure>
+            <figure>
+                <img src="images/vless_xhttp_wireshark.jpg" alt="Wireshark capture of VLESS + xHTTP over QUIC showing only UDP Initial/Handshake packets with no visible Client Hello">
+                <figcaption data-i18n="wireshark_xhttp_caption">VLESS + xHTTP (H3) — pure UDP/QUIC. No plaintext handshake frame is visible at all — only opaque <code>Initial</code> / <code>Handshake</code> datagrams.</figcaption>
+            </figure>
+        </div>
+
+        <div class="timeline">
+            <div class="tl-item">
+                <div class="tl-rail"><div class="tl-dot"></div><div class="tl-line"></div></div>
+                <div class="tl-content">
+                    <h4 data-i18n="wq_a_title">Why QUIC hides its own Client Hello</h4>
+                    <p data-i18n="wq_a_body">QUIC has no plaintext "Client Hello" the way TCP-based TLS does, because its very first packet — the <code>Initial</code> packet — is already partially encrypted using fixed, publicly-derived initial secrets, and the actual TLS 1.3 Client Hello is wrapped inside QUIC's own Crypto Frame from the first byte onward.</p>
+                </div>
+            </div>
+            <div class="tl-item">
+                <div class="tl-rail"><div class="tl-dot"></div><div class="tl-line"></div></div>
+                <div class="tl-content">
+                    <h4 data-i18n="wq_b_title">HTTP/2-over-TCP vs. QUIC framing</h4>
+                    <p data-i18n="wq_b_body">With HTTP/2 on TCP, the TCP handshake and the TLS handshake both happen fully in the open before any HTTP/2 data flows — so Wireshark shows a plain <code>Client Hello</code> at the transport/security layer. QUIC's Long/Short Header only exposes Version, Destination/Source Connection ID and Packet Number; the handshake itself never appears as readable bytes in the packet tree, only as generic <code>Crypto Frame</code> content inside an <code>Initial</code> packet.</p>
+                </div>
+            </div>
+            <div class="tl-item">
+                <div class="tl-rail"><div class="tl-dot"></div></div>
+                <div class="tl-content">
+                    <h4 data-i18n="wq_c_title">Decrypting it anyway</h4>
+                    <p data-i18n="wq_c_body">To actually see the QUIC Client Hello in Wireshark: set the <code>SSLKEYLOGFILE</code> environment variable on the browser/client generating the QUIC traffic to log session keys, then point Wireshark at that file under <em>Preferences → Protocols → TLS → (Pre)-Master-Secret log filename</em>. Only then can Wireshark decrypt the Crypto Frame and render the Client Hello under the TLS sub-tree of the QUIC packet.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="callout tip">
+            <span class="icon">🔍</span>
+            <p data-i18n="wireshark_callout"><strong>Takeaway:</strong> the WebSocket capture leaks the real SNI in cleartext — that's the exact field carrier DPI could check but doesn't. The xHTTP/QUIC capture leaks nothing readable at all without the session keys, which is why it's the harder transport to fingerprint.</p>
+        </div>
     </section>
 
     <!-- 6. FEATURES -->
@@ -853,6 +895,17 @@ en: {
     speedtest_title: "Real-World Speedtest",
     speedtest_ws_caption: "VLESS + WebSocket + TLS — 166 Mbps down / 41.3 Mbps up",
     speedtest_xhttp_caption: "VLESS + xHTTP + TLS + ALPN H3 — 183 Mbps down / 188 Mbps up",
+    wireshark_title: "Wireshark Packet Inspection",
+    wireshark_lead: "Capturing both transports side by side on the wire reveals a second, more subtle divide: WebSocket rides on classic TCP/TLS 1.3, while xHTTP over HTTP/3 rides on QUIC/UDP — and the two look completely different under a packet analyzer.",
+    wireshark_ws_caption: "VLESS + WebSocket — plain TCP handshake, then a visible TLS 1.3 <code>Client Hello</code> with the SNI (<code>homevps.huskydg.io.vn</code>) sitting in cleartext on the wire.",
+    wireshark_xhttp_caption: "VLESS + xHTTP (H3) — pure UDP/QUIC. No plaintext handshake frame is visible at all — only opaque <code>Initial</code> / <code>Handshake</code> datagrams.",
+    wq_a_title: "Why QUIC hides its own Client Hello",
+    wq_a_body: "QUIC has no plaintext \"Client Hello\" the way TCP-based TLS does, because its very first packet — the <code>Initial</code> packet — is already partially encrypted using fixed, publicly-derived initial secrets, and the actual TLS 1.3 Client Hello is wrapped inside QUIC's own Crypto Frame from the first byte onward.",
+    wq_b_title: "HTTP/2-over-TCP vs. QUIC framing",
+    wq_b_body: "With HTTP/2 on TCP, the TCP handshake and the TLS handshake both happen fully in the open before any HTTP/2 data flows — so Wireshark shows a plain <code>Client Hello</code> at the transport/security layer. QUIC's Long/Short Header only exposes Version, Destination/Source Connection ID and Packet Number; the handshake itself never appears as readable bytes in the packet tree, only as generic <code>Crypto Frame</code> content inside an <code>Initial</code> packet.",
+    wq_c_title: "Decrypting it anyway",
+    wq_c_body: "To actually see the QUIC Client Hello in Wireshark: set the <code>SSLKEYLOGFILE</code> environment variable on the browser/client generating the QUIC traffic to log session keys, then point Wireshark at that file under <em>Preferences → Protocols → TLS → (Pre)-Master-Secret log filename</em>. Only then can Wireshark decrypt the Crypto Frame and render the Client Hello under the TLS sub-tree of the QUIC packet.",
+    wireshark_callout: "<strong>Takeaway:</strong> the WebSocket capture leaks the real SNI in cleartext — that's the exact field carrier DPI could check but doesn't. The xHTTP/QUIC capture leaks nothing readable at all without the session keys, which is why it's the harder transport to fingerprint.",
     features_title: "Script Features",
     feat1_h: "Dynamic Environment Orchestration", feat1_b: "Automated verification and generation of localized <code>.env</code> dependencies.",
     feat2_h: "Quick & Named Tunnels", feat2_b: "Auto-detects whether to launch an ephemeral <code>trycloudflare.com</code> tunnel or a persistent custom domain.",
@@ -931,6 +984,17 @@ vi: {
     speedtest_title: "Speedtest Thực Tế",
     speedtest_ws_caption: "VLESS + WebSocket + TLS — 166 Mbps tải xuống / 41.3 Mbps tải lên",
     speedtest_xhttp_caption: "VLESS + xHTTP + TLS + ALPN H3 — 183 Mbps tải xuống / 188 Mbps tải lên",
+    wireshark_title: "Soi Gói Tin Bằng Wireshark",
+    wireshark_lead: "Bắt gói song song cả hai giao thức lộ ra một sự khác biệt tinh vi hơn: WebSocket chạy trên TCP/TLS 1.3 cổ điển, còn xHTTP qua HTTP/3 chạy trên QUIC/UDP — và hai loại này trông hoàn toàn khác nhau dưới công cụ phân tích gói tin.",
+    wireshark_ws_caption: "VLESS + WebSocket — bắt tay TCP thông thường, sau đó là gói <code>Client Hello</code> TLS 1.3 hiển thị rõ ràng với SNI (<code>homevps.huskydg.io.vn</code>) ở dạng plaintext trên đường truyền.",
+    wireshark_xhttp_caption: "VLESS + xHTTP (H3) — thuần UDP/QUIC. Không có bất kỳ frame bắt tay dạng plaintext nào — chỉ thấy các gói <code>Initial</code> / <code>Handshake</code> mờ đục.",
+    wq_a_title: "Vì sao QUIC không lộ Client Hello",
+    wq_a_body: "QUIC không có \"Client Hello\" tường minh như TLS trên TCP, vì gói tin đầu tiên của QUIC (gói <code>Initial</code>) đã được mã hóa một phần bằng các khóa cố định theo chuẩn (initial secrets), và bản thân gói Client Hello của TLS 1.3 được gói gọn bên trong lớp Crypto Frame của QUIC ngay từ byte đầu tiên.",
+    wq_b_title: "HTTP/2 trên TCP so với cấu trúc frame của QUIC",
+    wq_b_body: "Với HTTP/2 trên TCP, quá trình bắt tay TCP và bắt tay TLS diễn ra hoàn toàn tường minh trước khi dữ liệu HTTP/2 được truyền đi, nên Wireshark hiển thị rõ gói TLS <code>Client Hello</code> ở lớp transport/security. Tiêu đề Long/Short Header của QUIC chỉ để lộ Version, Destination/Source Connection ID và Packet Number; bản thân handshake không bao giờ xuất hiện dưới dạng byte đọc được trên cây giao thức, mà chỉ là nội dung <code>Crypto Frame</code> chung chung bên trong một gói <code>Initial</code>.",
+    wq_c_title: "Vẫn có thể giải mã được",
+    wq_c_body: "Để soi chi tiết nội dung Client Hello của QUIC trong Wireshark: thiết lập biến môi trường <code>SSLKEYLOGFILE</code> trên trình duyệt/client tạo ra traffic QUIC để lưu lại session keys, sau đó nạp file key đó vào Wireshark qua mục <em>Preferences → Protocols → TLS → (Pre)-Master-Secret log filename</em>. Khi đó Wireshark mới giải mã được lớp Crypto Frame và hiển thị tường minh nội dung Client Hello bên dưới nhánh TLS của gói QUIC.",
+    wireshark_callout: "<strong>Kết luận:</strong> gói tin WebSocket làm lộ SNI thật ở dạng plaintext — đúng là trường mà DPI của nhà mạng có thể kiểm tra nhưng lại không làm. Gói tin xHTTP/QUIC không lộ bất kỳ nội dung đọc được nào nếu thiếu session keys, đó là lý do nó khó bị nhận diện hơn.",
     features_title: "Các Tính Năng Của Script",
     feat1_h: "Điều Phối Môi Trường Tự Động", feat1_b: "Tự động kiểm tra và tạo các phụ thuộc <code>.env</code> cục bộ.",
     feat2_h: "Tunnel Tạm Thời & Cố Định", feat2_b: "Tự động nhận diện để khởi chạy tunnel <code>trycloudflare.com</code> tạm thời hoặc domain riêng cố định.",
