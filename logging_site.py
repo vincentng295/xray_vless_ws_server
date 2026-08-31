@@ -33,6 +33,8 @@ LOGGING_HTML_TEMPLATE = """
     <script>
         const logContainer = document.getElementById("log-container");
         let lastLogId = 0;
+        const urlParams = new URLSearchParams(window.location.search);
+        const pwd = urlParams.get("password") || "";
         function formatLog(item) {
             let typeClass = "type-info";
             const type = (item.type || "INFO").toUpperCase();
@@ -43,7 +45,7 @@ LOGGING_HTML_TEMPLATE = """
         }
         async function fetchLogs() {
             try {
-                const res = await fetch(`/logs?last_id=${lastLogId}`);
+                const res = await fetch(`/logs?last_id=${lastLogId}${pwd ? `&password=${encodeURIComponent(pwd)}` : ""}`);
                 const data = await res.json();
                 if (data.new_logs.length > 0) {
                     if (logContainer.innerText.includes("Đang chờ")) logContainer.innerHTML = "";
@@ -60,7 +62,8 @@ LOGGING_HTML_TEMPLATE = """
 """
 
 class RealtimeLogger:
-    def __init__(self, port=8080, password="admin", max_logs=500):
+    def __init__(self, host="0.0.0.0", port=8080, password="admin", max_logs=500):
+        self.host = host
         self.port = port
         self.password = password
         self.max_logs = max_logs
@@ -102,6 +105,14 @@ class RealtimeLogger:
 
             def check_auth(self):
                 if not logger_ref.password: return True
+
+                # Ưu tiên kiểm tra password qua query string: ?password=xxxx
+                parsed = urlparse(self.path)
+                query = parse_qs(parsed.query)
+                if "password" in query:
+                    return query["password"][0] == logger_ref.password
+
+                # Fallback: Basic Auth qua header
                 auth = self.headers.get("Authorization")
                 if not auth: return False
                 try:
@@ -142,15 +153,15 @@ class RealtimeLogger:
     def start(self):
         """Khởi chạy server trong một thread riêng"""
         if self.server:
-            return f"http://localhost:{self.port}"
+            return f"http://{self.host}:{self.port}"
 
         def run_server():
-            self.server = ThreadingHTTPServer(("0.0.0.0", self.port), self._create_handler())
+            self.server = ThreadingHTTPServer((self.host, self.port), self._create_handler())
             self.server.serve_forever()
 
         self.server_thread = threading.Thread(target=run_server, daemon=True)
         self.server_thread.start()
-        return f"http://localhost:{self.port}"
+        return f"http://{self.host}:{self.port}"
 
     def stop(self):
         """Dừng server"""

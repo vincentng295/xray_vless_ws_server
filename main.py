@@ -24,6 +24,7 @@ def main():
     # =========================================
     default_configs = {
         "PORT": "127.0.0.1:8888",
+        "PASSWORD": "123",
         "XRAY_UUID": str(uuid.uuid4()),
         "FAKE_SNI": "api24-normal-alisg.tiktokv.com,vnpt.theworkpc.com",
         "WS_PATH": "/tiktok4g",
@@ -32,6 +33,7 @@ def main():
         "XHTTP_MODE": "packet-up",
         "ENABLE_WARP": "false",
         "WEBHOOK_URL": "",
+        "DEBUG_MODE": "false",
         "TUNNEL_TOKEN": ""
     }
     START_TIME = int(time.time())
@@ -74,7 +76,8 @@ def main():
     WEBHOOK_URL = get_os_env("WEBHOOK_URL")
     TUNNEL_TOKEN = get_os_env("TUNNEL_TOKEN").strip()
     ENABLE_WARP = get_os_env("ENABLE_WARP").lower() == "true"
-    DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
+    PASSWORD = get_os_env("PASSWORD")
+    DEBUG_MODE = get_os_env("DEBUG_MODE").lower() == "true"
 
     # TRANSPORT: "websocket", "xhttp", or "websocket,xhttp" to run both at once.
     _transport_raw = get_os_env("TRANSPORT").strip().lower()
@@ -431,7 +434,7 @@ def main():
     cloudflare_url = None
     
     try:
-        logger = RealtimeLogger(port=9999, password=None)
+        logger = RealtimeLogger(host="127.0.0.1", port=9999, password=PASSWORD)
         logger_url = logger.start()
         print(f"[*] Logger Web UI is running at: {logger_url}")
     except Exception:
