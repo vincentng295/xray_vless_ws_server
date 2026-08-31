@@ -27,11 +27,6 @@ def get_download_info():
     if sys == "darwin": # macOS
         return "cloudflared-darwin-amd64.tgz", "cloudflared"
 
-    if sys == "android":
-        # Termux cannot run cloudflared directly, suggest using package manager
-        print("Please install cloudflared by: pkg install cloudflared -y")
-        print("Or using ubuntu proot distro in Termux")
-
     raise Exception(f"OS {sys} {arch} not supported.")
 
 def download_file(url, filename):
@@ -43,11 +38,23 @@ def download_file(url, filename):
                 f.write(chunk)
 
 def install_cloudflared():
+    sys = platform.system().lower()
+    arch = platform.machine().lower()
+    print(f"Hệ thống: {sys} ({arch})")
+
+    if sys == "android":
+        # Symlink to /data/data/com.termux/files/usr/bin/cloudflared if installed
+        if os.path.exists("/data/data/com.termux/files/usr/bin/cloudflared"):
+            os.symlink("/data/data/com.termux/files/usr/bin/cloudflared", "cloudflared")
+            return
+        # Termux cannot run cloudflared directly, suggest using package manager
+        print("Please install cloudflared by: pkg install cloudflared -y")
+        print("Or using ubuntu proot distro in Termux")
+        raise Exception("Termux does not support direct installation of cloudflared. Please use the package manager.")
+
     remote_file, local_name = get_download_info()
     url = f"{BASE_URL}/{remote_file}"
     
-    print(f"Hệ thống: {platform.system()} ({platform.machine()})")
-
     # Cloudflared thường tải về là file chạy luôn (trừ macOS/FreeBSD là file nén)
     if remote_file.endswith(".exe") or "linux" in remote_file:
         download_file(url, local_name)
@@ -61,7 +68,7 @@ def install_cloudflared():
         os.rename(temp_archive, local_name)
 
     # Cấp quyền thực thi cho Linux/macOS
-    if platform.system().lower() != "windows":
+    if sys != "windows":
         os.chmod(local_name, 0o755)
 
     print(f"--- Đã cài đặt xong: {os.path.abspath(local_name)} ---")
