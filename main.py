@@ -10,6 +10,16 @@ import subprocess
 import platform
 import uuid
 import time
+import datetime
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PrivateFormat,
+    NoEncryption,
+)
+from cryptography.x509.oid import NameOID
 from logging_site import RealtimeLogger
 import requests
 import importlib
@@ -34,7 +44,10 @@ def main():
         "ENABLE_WARP": "false",
         "WEBHOOK_URL": "",
         "DEBUG_MODE": "false",
-        "TUNNEL_TOKEN": ""
+        "TUNNEL_TOKEN": "",
+        "TLS_PORT": "",
+        "TLS_KEY": "",
+        "TLS_PEM": ""
     }
     START_TIME = int(time.time())
 
@@ -79,6 +92,12 @@ def main():
     PASSWORD = get_os_env("PASSWORD")
     DEBUG_MODE = get_os_env("DEBUG_MODE").lower() == "true"
 
+    # TLS_PORT: optional direct VLESS+TLS listener (security=tls), independent
+    # of the Cloudflare-facing ws/xhttp inbound(s). Same "ip:port" format as PORT.
+    TLS_PORT_ENV = get_os_env("TLS_PORT").strip()
+    TLS_KEY = get_os_env("TLS_KEY").strip()
+    TLS_PEM = get_os_env("TLS_PEM").strip()
+
     # TRANSPORT: "websocket", "xhttp", or "websocket,xhttp" to run both at once.
     _transport_raw = get_os_env("TRANSPORT").strip().lower()
     _seen = set()
@@ -116,6 +135,73 @@ def main():
             inbound_ports.append((listen_ip, port_num))
         else:
             inbound_ports.append(("0.0.0.0", int(p_item)))
+
+    # Parse TLS_PORT (same "ip:port" / "port" format as PORT). Empty disables it.
+    tls_listen = None
+    if TLS_PORT_ENV:
+        if ":" in TLS_PORT_ENV:
+            _tls_parts = TLS_PORT_ENV.split(":")
+            _tls_ip = ":".join(_tls_parts[:-1]) or "0.0.0.0"
+            _tls_port_num = int(_tls_parts[-1])
+        else:
+            _tls_ip = "0.0.0.0"
+            _tls_port_num = int(TLS_PORT_ENV)
+        tls_listen = (_tls_ip, _tls_port_num)
+
+    def generate_self_signed_cert(domain):
+        os.makedirs("tls", exist_ok=True)
+        key_path = os.path.join("tls", "private.key")
+        pem_path = os.path.join("tls", "fullchain.pem")
+        if os.path.exists(key_path) and os.path.exists(pem_path):
+            print(f"[*] Found existing self-signed cert at {key_path} / {pem_path}, reusing.")
+            return key_path, pem_path
+        print(f"[*] TLS_KEY/TLS_PEM not set, generating self-signed certificate for '{domain}'...")
+        try:
+            private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+            subject = issuer = x509.Name([
+                x509.NameAttribute(NameOID.COMMON_NAME, domain),
+            ])
+
+            now = datetime.datetime.now(datetime.timezone.utc)
+            cert = (
+                x509.CertificateBuilder()
+                .subject_name(subject)
+                .issuer_name(issuer)
+                .public_key(private_key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(now - datetime.timedelta(days=1))
+                .not_valid_after(now + datetime.timedelta(days=3650))
+                .add_extension(
+                    x509.SubjectAlternativeName([x509.DNSName(domain)]),
+                    critical=False,
+                )
+                .sign(private_key, hashes.SHA256())
+            )
+
+            with open(key_path, "wb") as f:
+                f.write(
+                    private_key.private_bytes(
+                        encoding=Encoding.PEM,
+                        format=PrivateFormat.TraditionalOpenSSL,
+                        encryption_algorithm=NoEncryption(),
+                    )
+                )
+            with open(pem_path, "wb") as f:
+                f.write(cert.public_bytes(Encoding.PEM))
+
+            print(f"[+] Generated self-signed cert: {key_path}, {pem_path}")
+        except Exception as e:
+            print(f"[!] Failed to generate self-signed cert: {e}")
+        return key_path, pem_path
+
+    tls_key_path = None
+    tls_pem_path = None
+    if tls_listen:
+        if TLS_KEY and TLS_PEM:
+            tls_key_path, tls_pem_path = TLS_KEY, TLS_PEM
+        else:
+            tls_key_path, tls_pem_path = generate_self_signed_cert(WS_HOST)
 
     # Cloudflare tunnel will point to the first port in the list
     CLOUDFLARE_TARGET_IP = inbound_ports[0][0]
@@ -339,6 +425,38 @@ def main():
                     },
                     "streamSettings": build_stream_settings(TRANSPORTS[0])
                 })
+
+        if tls_listen:
+            tls_ip, tls_port_num = tls_listen
+            tls_stream = build_stream_settings(TRANSPORTS[0])
+            tls_stream["security"] = "tls"
+            tls_stream["tlsSettings"] = {
+                "certificates": [
+                    {
+                        "certificateFile": tls_pem_path,
+                        "keyFile": tls_key_path
+                    }
+                ]
+            }
+            inbounds.append({
+                "port": tls_port_num,
+                "listen": tls_ip,
+                "protocol": "vless",
+                "sniffing": {
+                    "enabled": True,
+                    "destOverride": ["http", "tls"]
+                },
+                "settings": {
+                    "clients": [
+                        {
+                            "id": UUID,
+                            "level": 0
+                        }
+                    ],
+                    "decryption": "none"
+                },
+                "streamSettings": tls_stream
+            })
 
         xray_config = {
             "log": {
