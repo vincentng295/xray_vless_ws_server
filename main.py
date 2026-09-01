@@ -124,29 +124,37 @@ def main():
         XHTTP_MODE = "packet-up"
 
     # Parse multi-port configuration
-    # Supported formats: "8888" (defaults to 0.0.0.0), "127.0.0.1:8888", "0.0.0.0:443,0.0.0.0:80"
-    inbound_ports = []
-    for p_item in PORT_ENV.split(","):
-        p_item = p_item.strip()
-        if ":" in p_item:
-            parts = p_item.split(":")
+    # Supported formats: "8888" (defaults to 0.0.0.0), "127.0.0.1:8888",
+    # "0.0.0.0:443,0.0.0.0:80", and bracketed IPv6 like "[::1]:8888" or "[::]:443"
+    # (the brackets are stripped -> listen_ip becomes the bare "::1" / "::",
+    # which is what Xray's JSON "listen" field and Python's socket module expect).
+    def parse_addr_port(item):
+        item = item.strip()
+        if item.startswith("["):
+            end = item.index("]")
+            ip = item[1:end]
+            rest = item[end + 1:]
+            if not rest.startswith(":"):
+                raise ValueError(f"Invalid address:port '{item}' (missing port after ']')")
+            port = int(rest[1:])
+            return ip or "::", port
+        if ":" in item:
+            parts = item.split(":")
             listen_ip = ":".join(parts[:-1])
             port_num = int(parts[-1])
-            inbound_ports.append((listen_ip, port_num))
-        else:
-            inbound_ports.append(("0.0.0.0", int(p_item)))
+            return listen_ip, port_num
+        return "0.0.0.0", int(item)
 
-    # Parse TLS_PORT (same "ip:port" / "port" format as PORT). Empty disables it.
+    inbound_ports = []
+    for p_item in PORT_ENV.split(","):
+        if not p_item.strip():
+            continue
+        inbound_ports.append(parse_addr_port(p_item))
+
+    # Parse TLS_PORT (same format as PORT, brackets supported for IPv6). Empty disables it.
     tls_listen = None
     if TLS_PORT_ENV:
-        if ":" in TLS_PORT_ENV:
-            _tls_parts = TLS_PORT_ENV.split(":")
-            _tls_ip = ":".join(_tls_parts[:-1]) or "0.0.0.0"
-            _tls_port_num = int(_tls_parts[-1])
-        else:
-            _tls_ip = "0.0.0.0"
-            _tls_port_num = int(TLS_PORT_ENV)
-        tls_listen = (_tls_ip, _tls_port_num)
+        tls_listen = parse_addr_port(TLS_PORT_ENV)
 
     def generate_self_signed_cert(domain):
         os.makedirs("tls", exist_ok=True)
@@ -209,6 +217,12 @@ def main():
     # If listening on all interfaces, force cloudflared to connect via localhost
     if CLOUDFLARE_TARGET_IP == "0.0.0.0":
         CLOUDFLARE_TARGET_IP = "127.0.0.1"
+    elif CLOUDFLARE_TARGET_IP in ("::", "::0"):
+        CLOUDFLARE_TARGET_IP = "::1"
+    # http:// URLs need brackets around a literal IPv6 host
+    CLOUDFLARE_TARGET_HOST = (
+        f"[{CLOUDFLARE_TARGET_IP}]" if ":" in CLOUDFLARE_TARGET_IP else CLOUDFLARE_TARGET_IP
+    )
 
     def send_webhook(data):
         if not WEBHOOK_URL: 
@@ -347,9 +361,14 @@ def main():
         threading.Thread(target=pipe_bytes, args=(backend_conn, client_conn), daemon=True).start()
 
     def start_demux_server(listen_ip, listen_port, ws_port, xhttp_port):
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        is_v6 = ":" in listen_ip
+        family = socket.AF_INET6 if is_v6 else socket.AF_INET
+        srv = socket.socket(family, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind((listen_ip if listen_ip != "0.0.0.0" else "", listen_port))
+        bind_ip = listen_ip
+        if not is_v6 and listen_ip == "0.0.0.0":
+            bind_ip = ""
+        srv.bind((bind_ip, listen_port))
         srv.listen(128)
 
         def accept_loop():
@@ -513,7 +532,7 @@ def main():
             f"tunnel: {TUNNEL_TOKEN}\n\n"
             "ingress:\n"
             f"  - hostname: {WS_HOST}\n"
-            f"    service: http://{CLOUDFLARE_TARGET_IP}:{CLOUDFLARE_TARGET_PORT}\n"
+            f"    service: http://{CLOUDFLARE_TARGET_HOST}:{CLOUDFLARE_TARGET_PORT}\n"
             "  - service: http_status:404\n"
         )
         with open("config.yml", "w", encoding="utf-8") as f:
@@ -531,9 +550,9 @@ def main():
                 encoding='utf-8',
                 errors='replace'
             )
-        print(f"[*] Launching Cloudflare Tunnel pointing to http://{CLOUDFLARE_TARGET_IP}:{CLOUDFLARE_TARGET_PORT}...")
+        print(f"[*] Launching Cloudflare Tunnel pointing to http://{CLOUDFLARE_TARGET_HOST}:{CLOUDFLARE_TARGET_PORT}...")
         return subprocess.Popen(
-            [CLF_BIN, "tunnel", "--protocol", "http2", "--url", f"http://{CLOUDFLARE_TARGET_IP}:{CLOUDFLARE_TARGET_PORT}"],
+            [CLF_BIN, "tunnel", "--protocol", "http2", "--url", f"http://{CLOUDFLARE_TARGET_HOST}:{CLOUDFLARE_TARGET_PORT}"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
