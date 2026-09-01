@@ -127,7 +127,7 @@ python main.py
 ## Cấu Hình Tệp Môi Trường (`.env`)
 
 ```ini
-PORT=127.0.0.1:8888,0.0.0.0:443,0.0.0.0:80
+PORT=127.0.0.1:8888,0.0.0.0:80
 XRAY_UUID=5ccad305-e243-4bb2-abf0-1e37189ce4e8
 FAKE_SNI=api24-normal-alisg.tiktokv.com
 WS_PATH=/tiktok4g
