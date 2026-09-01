@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import ipaddress
 import socket
 from urllib import request
 from sys import prefix
@@ -23,6 +24,7 @@ from cryptography.x509.oid import NameOID
 from logging_site import RealtimeLogger
 import requests
 import importlib
+import socket
 
 xray_downloader = importlib.import_module("download-xray")
 cloudflared_downloader = importlib.import_module("download-cloudflared")
@@ -62,6 +64,43 @@ def main():
         except Exception as e:
             print(f"[!] Failed to get public IP: {e}")
             return "0.0.0.0"
+
+    INTRANET_RANGES = [
+        # IPv4
+        "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8",
+        "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24",
+        "192.88.99.0/24", "192.168.0.0/16", "198.51.100.0/24", "203.0.113.0/24",
+        "224.0.0.0/4", "240.0.0.0/4", "255.0.0.0/4", "255.255.255.0/24",
+        "255.255.255.255/32",
+        # IPv6
+        "::/128", "::1/128", "::ffff:0:0/96", "100::/64", "64:ff9b::/96",
+        "2001::/32", "2001:10::/28", "2001:20::/28", "2001:db8::/32",
+        "2002::/16", "fc00::/7", "fe80::/10", "ff00::/8"
+    ]
+    PRIVATE_NETWORKS = [ipaddress.ip_network(net, strict=False) for net in INTRANET_RANGES]
+
+    def get_all_ips():
+        hostname = socket.gethostname()
+        addr_info = socket.getaddrinfo(hostname, None)
+        ip_addresses = set()
+        for info in addr_info:
+            ip = info[4][0]
+            ip_addresses.add(ip)
+        return ip_addresses
+
+    def get_all_public_ips():
+        all_ips = get_all_ips()
+        public_ips = set()
+        
+        for ip_str in all_ips:
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+                is_intranet = any(ip_obj in net for net in PRIVATE_NETWORKS)
+                if not is_intranet:
+                    public_ips.add(ip_str)
+            except ValueError:
+                continue   
+        return public_ips if public_ips else None
 
     def init_env_file():
         env_path = ".env"
@@ -506,6 +545,11 @@ def main():
         return demux_servers
 
     demux_servers = write_configs()
+
+    print(f"All IPs: {get_all_ips()}") if DEBUG_MODE else None
+
+    if get_all_public_ips() is None:
+        print("[!] No Public IP was found on this host. Cloudflared Tunnel is needed if you want host to be connected from outside!")
 
     print(f"[*] Launching XRAY with multi-port inbounds...")
     # Using 'run' with extra environment or fallback handling is ideal, 
