@@ -12,15 +12,6 @@ import platform
 import uuid
 import time
 import datetime
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.serialization import (
-    Encoding,
-    PrivateFormat,
-    NoEncryption,
-)
-from cryptography.x509.oid import NameOID
 from logging_site import RealtimeLogger
 import requests
 import importlib
@@ -195,60 +186,16 @@ def main():
     if TLS_PORT_ENV:
         tls_listen = parse_addr_port(TLS_PORT_ENV)
 
-    def generate_self_signed_cert(domain):
-        os.makedirs("tls", exist_ok=True)
-        key_path = os.path.join("tls", "private.key")
-        pem_path = os.path.join("tls", "fullchain.pem")
-        if os.path.exists(key_path) and os.path.exists(pem_path):
-            print(f"[*] Found existing self-signed cert at {key_path} / {pem_path}, reusing.")
-            return key_path, pem_path
-        print(f"[*] TLS_KEY/TLS_PEM not set, generating self-signed certificate for '{domain}'...")
-        try:
-            private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-            subject = issuer = x509.Name([
-                x509.NameAttribute(NameOID.COMMON_NAME, domain),
-            ])
-
-            now = datetime.datetime.now(datetime.timezone.utc)
-            cert = (
-                x509.CertificateBuilder()
-                .subject_name(subject)
-                .issuer_name(issuer)
-                .public_key(private_key.public_key())
-                .serial_number(x509.random_serial_number())
-                .not_valid_before(now - datetime.timedelta(days=1))
-                .not_valid_after(now + datetime.timedelta(days=3650))
-                .add_extension(
-                    x509.SubjectAlternativeName([x509.DNSName(domain)]),
-                    critical=False,
-                )
-                .sign(private_key, hashes.SHA256())
-            )
-
-            with open(key_path, "wb") as f:
-                f.write(
-                    private_key.private_bytes(
-                        encoding=Encoding.PEM,
-                        format=PrivateFormat.TraditionalOpenSSL,
-                        encryption_algorithm=NoEncryption(),
-                    )
-                )
-            with open(pem_path, "wb") as f:
-                f.write(cert.public_bytes(Encoding.PEM))
-
-            print(f"[+] Generated self-signed cert: {key_path}, {pem_path}")
-        except Exception as e:
-            print(f"[!] Failed to generate self-signed cert: {e}")
-        return key_path, pem_path
-
     tls_key_path = None
     tls_pem_path = None
     if tls_listen:
-        if TLS_KEY and TLS_PEM:
-            tls_key_path, tls_pem_path = TLS_KEY, TLS_PEM
-        else:
-            tls_key_path, tls_pem_path = generate_self_signed_cert(WS_HOST)
+        if not (TLS_KEY and TLS_PEM):
+            raise SystemExit(
+                "[!] TLS_PORT is set but TLS_KEY and/or TLS_PEM are empty. "
+                "Please set TLS_KEY and TLS_PEM in .env to the paths of your "
+                "certificate key and fullchain PEM files."
+            )
+        tls_key_path, tls_pem_path = TLS_KEY, TLS_PEM
 
     # Cloudflare tunnel will point to the first port in the list
     CLOUDFLARE_TARGET_IP = inbound_ports[0][0]
