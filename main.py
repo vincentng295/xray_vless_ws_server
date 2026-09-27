@@ -42,7 +42,7 @@ def main():
         "TLS_PORT": "",
         "TLS_KEY": "",
         "TLS_PEM": "",
-        "DNSECH" : "https://1.1.1.1/dns-query"
+        "DNSECH" : ""
     }
     START_TIME = int(time.time())
 
