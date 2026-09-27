@@ -16,6 +16,7 @@ from logging_site import RealtimeLogger
 import requests
 import importlib
 import socket
+import base64
 
 xray_downloader = importlib.import_module("download-xray")
 cloudflared_downloader = importlib.import_module("download-cloudflared")
@@ -680,11 +681,17 @@ def main():
                     f"vless://{uuid_str}@{sni}:443?type={net_type}&encryption=none&security=tls&ech={ech_param}&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}{mode_param}{alpn_param_tls}#{encoded_remark}",
                 ])
 
+        frp_info_txt = ""
+        
+        for payload in payloads:
+            frp_info_txt += payload;
+            frp_info_txt += "\n" if payloads.index(payload) < len(payloads)-1 else ""
+            print(payload) if DEBUG_MODE else None
+
         with open("frp_info.config", "w", encoding='utf-8') as f:
-            for payload in payloads:
-                f.write(payload);
-                f.write("\n") if payloads.index(payload) < len(payloads)-1 else None
-                print(payload) if DEBUG_MODE else None
+            # Encode frp_info to base64 to avoid issues with special characters in the payloads
+            encoded_info = base64.b64encode(frp_info_txt.encode('utf-8')).decode('utf-8')
+            f.write(encoded_info)
             print("Written to frp_info.config")
         
         frp_info = {
