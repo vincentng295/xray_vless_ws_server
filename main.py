@@ -40,7 +40,8 @@ def main():
         "TUNNEL_TOKEN": "",
         "TLS_PORT": "",
         "TLS_KEY": "",
-        "TLS_PEM": ""
+        "TLS_PEM": "",
+        "DNSECH" : "https://1.1.1.1/dns-query"
     }
     START_TIME = int(time.time())
 
@@ -120,6 +121,7 @@ def main():
     TUNNEL_TOKEN = get_os_env("TUNNEL_TOKEN").strip()
     ENABLE_WARP = get_os_env("ENABLE_WARP").lower() == "true"
     PASSWORD = get_os_env("PASSWORD")
+    DNSECH = get_os_env("DNSECH").strip()
     DEBUG_MODE = get_os_env("DEBUG_MODE").lower() == "true"
 
     # TLS_PORT: optional direct VLESS+TLS listener (security=tls), independent
@@ -650,6 +652,9 @@ def main():
             mode_param = ""
             alpn_param_tls = ""
 
+        # vless ech format: <domain>+<dns>
+        ech_param = urllib.parse.quote(WS_HOST + '+' + DNSECH, safe='')
+
         payloads = []
         sni_list = fake_sni.split(",");
 
@@ -667,12 +672,12 @@ def main():
 
             if DUAL_TRANSPORT:
                 payloads.extend([
-                    f"vless://{uuid_str}@{sni}:443?type=ws&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}#{encoded_remark}%20WS",
-                    f"vless://{uuid_str}@{sni}:443?type=xhttp&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}&mode={XHTTP_MODE}&alpn=h3%2Ch2#{encoded_remark}%20XHTTP",
+                    f"vless://{uuid_str}@{sni}:443?type=ws&encryption=none&security=tls&ech={ech_param}&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}#{encoded_remark}%20WS",
+                    f"vless://{uuid_str}@{sni}:443?type=xhttp&encryption=none&security=tls&ech={ech_param}&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}&mode={XHTTP_MODE}&alpn=h3%2Ch2#{encoded_remark}%20XHTTP",
                 ])
             else:
                 payloads.extend([
-                    f"vless://{uuid_str}@{sni}:443?type={net_type}&encryption=none&security=tls&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}{mode_param}{alpn_param_tls}#{encoded_remark}",
+                    f"vless://{uuid_str}@{sni}:443?type={net_type}&encryption=none&security=tls&ech={ech_param}&path={encoded_path}&host={tunnel_host_info}&sni={tunnel_host_info}{mode_param}{alpn_param_tls}#{encoded_remark}",
                 ])
 
         with open("frp_info.config", "w", encoding='utf-8') as f:
