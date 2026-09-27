@@ -654,7 +654,7 @@ def main():
             alpn_param_tls = ""
 
         # vless ech format: <domain>+<dns>
-        ech_param = urllib.parse.quote(WS_HOST + '+' + DNSECH, safe='')
+        ech_param = urllib.parse.quote(WS_HOST + '+' + DNSECH, safe='') if DNSECH else ""
 
         payloads = []
         sni_list = fake_sni.split(",");
