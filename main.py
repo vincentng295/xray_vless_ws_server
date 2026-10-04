@@ -387,7 +387,8 @@ def main():
                     "protocol": "vless",
                     "sniffing": {
                         "enabled": True,
-                        "destOverride": ["http", "tls"]
+                        "destOverride": ["http", "tls", "quic"],
+                        "routeOnly": True
                     },
                     "settings": {
                         "clients": [{"id": UUID, "level": 0}],
@@ -401,7 +402,8 @@ def main():
                     "protocol": "vless",
                     "sniffing": {
                         "enabled": True,
-                        "destOverride": ["http", "tls"]
+                        "destOverride": ["http", "tls", "quic"],
+                        "routeOnly": True
                     },
                     "settings": {
                         "clients": [{"id": UUID, "level": 0}],
@@ -420,7 +422,8 @@ def main():
                     "protocol": "vless",
                     "sniffing": {
                         "enabled": True,
-                        "destOverride": ["http", "tls"]
+                        "destOverride": ["http", "tls", "quic"],
+                        "routeOnly": True
                     },
                     "settings": {
                         "clients": [
@@ -452,7 +455,8 @@ def main():
                 "protocol": "vless",
                 "sniffing": {
                     "enabled": True,
-                    "destOverride": ["http", "tls"]
+                    "destOverride": ["http", "tls", "quic"],
+                    "routeOnly": True
                 },
                 "settings": {
                     "clients": [
