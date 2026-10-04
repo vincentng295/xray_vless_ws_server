@@ -1,4 +1,5 @@
 import os
+import copy
 import json
 import re
 import ipaddress
@@ -120,7 +121,13 @@ def main():
     WS_HOST = get_os_env("WS_HOST")
     WEBHOOK_URL = get_os_env("WEBHOOK_URL")
     TUNNEL_TOKEN = get_os_env("TUNNEL_TOKEN").strip()
-    ENABLE_WARP = get_os_env("ENABLE_WARP").lower() == "true"
+    # ENABLE_WARP: "false" (off), "true" (all traffic via WARP) or
+    # "ip6only" (only IPv6 traffic via WARP, IPv4 keeps using the main route).
+    WARP_MODE = get_os_env("ENABLE_WARP").strip().lower()
+    if WARP_MODE not in ("true", "false", "ip6only"):
+        print(f"[!] Invalid ENABLE_WARP={WARP_MODE!r} (expected false/true/ip6only), WARP disabled.")
+        WARP_MODE = "false"
+    ENABLE_WARP = WARP_MODE in ("true", "ip6only")
     PASSWORD = get_os_env("PASSWORD")
     DNSECH = get_os_env("DNSECH").strip()
     DEBUG_MODE = get_os_env("DEBUG_MODE").lower() == "true"
@@ -477,6 +484,7 @@ def main():
             "inbounds": inbounds,
             "outbounds": [
                 {
+                    "tag": "direct",
                     "protocol": "freedom",
                     "settings": {
                         "domainStrategy": "UseIPv4"
@@ -485,9 +493,59 @@ def main():
             ]
         }
 
-        # Change outbound to WARP if enabled
+        # Always use DoH (direct, not via routing): the OS resolver (e.g.
+        # getaddrinfow on Windows) may return nothing for AAAA on hosts without IPv6.
+        xray_config["dns"] = {
+            "servers": ["https+local://1.1.1.1/dns-query"],
+            "queryStrategy": "UseIP"
+        }
+
         if ENABLE_WARP and wgcf_outbound:
-            xray_config["outbounds"].insert(0, wgcf_outbound)
+            if WARP_MODE == "ip6only":
+                # Keep "direct" as the default (first) outbound so IPv4 uses the
+                # main route; only destinations resolving to IPv6 go through WARP.
+                warp_out = copy.deepcopy(wgcf_outbound)
+                warp_tag = warp_out.setdefault("tag", "wireguard")
+                # ForceIPv6 also applies to the WireGuard *endpoint* hostname
+                # (engage.cloudflareclient.com), which would then resolve to an IPv6
+                # address and fail on hosts without IPv6 ("unreachable network",
+                # handshake never completes). Pin the endpoint to an IPv4 literal so
+                # the tunnel itself is established over IPv4.
+                for peer in warp_out.get("settings", {}).get("peers", []):
+                    endpoint = peer.get("endpoint", "")
+                    host, sep, ep_port = endpoint.strip().rpartition(":")
+                    host = host.strip("[]")
+                    if not sep or not host:
+                        continue
+                    try:
+                        ipaddress.ip_address(host)
+                        continue  # already an IP literal, keep as is
+                    except ValueError:
+                        pass
+                    try:
+                        v4 = socket.getaddrinfo(host, None, socket.AF_INET)[0][4][0]
+                    except Exception as e:
+                        v4 = "162.159.192.1"
+                        print(f"[!] Failed to resolve WARP endpoint {host} to IPv4 ({e}), using {v4}")
+                    peer["endpoint"] = f"{v4}:{ep_port}"
+                # When the target is a domain, make WARP connect to its IPv6 address
+                warp_out.setdefault("settings", {})["domainStrategy"] = "ForceIPv6"
+                xray_config["outbounds"].append(warp_out)
+                # IPIfNonMatch: if no rule matches a domain, Xray resolves it and
+                # re-evaluates IP rules (so domains with AAAA records match ::/0).
+                xray_config["routing"] = {
+                    "domainStrategy": "IPIfNonMatch",
+                    "rules": [
+                        {
+                            "type": "field",
+                            "ip": ["::/0"],
+                            "outboundTag": warp_tag
+                        }
+                    ]
+                }
+            else:
+                # "true": WARP becomes the default (first) outbound for everything
+                xray_config["outbounds"].insert(0, wgcf_outbound)
 
         if os.path.exists("config.json"):
             try: os.remove("config.json")
